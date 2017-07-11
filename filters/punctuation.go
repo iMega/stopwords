@@ -1,0 +1,30 @@
+package filters
+
+import (
+	"strings"
+	"regexp"
+)
+
+type puctuation struct {
+
+}
+
+func NewPunctuation() TextFilter {
+	return puctuation{}
+}
+
+func (p puctuation) Filter(s string) string {
+	r := strings.NewReplacer(
+		", ", " ",
+		". ", " ",
+		"! ", " ",
+		"? ", " ",
+	)
+
+	ret := r.Replace(s)
+
+	re := regexp.MustCompile(`(\!|\.|\?)$`)
+	ret = re.ReplaceAllString(ret, "")
+
+	return ret
+}
