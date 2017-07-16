@@ -9,14 +9,20 @@ TF - простой способ оценить важность термина 
 package main
 
 import (
-	"strings"
-	"fmt"
-	"github.com/golang/leveldb"
-	"github.com/golang/leveldb/db"
 	"bytes"
 	"encoding/binary"
+	"flag"
+	"fmt"
+	"io/ioutil"
+	"os"
+	"strings"
+
+	"github.com/golang/leveldb"
+	"github.com/golang/leveldb/db"
+	"github.com/imega/stopwords/filters"
 )
 
+// TF struct
 type TF struct {
 	Rune      string
 	Frequency float64
@@ -29,29 +35,44 @@ type tfdb struct {
 }
 
 func main() {
-	var docCount uint64 = 0
-	text := "Lorem ipsum dolor sit amet"
+	var docCount = 0
+
+	filename := flag.String("file", "", "Parse file")
+	flag.Parse()
+
+	bdata, err := ioutil.ReadFile(*filename)
+	if err != nil {
+		fmt.Printf("error: %v", err)
+		os.Exit(1)
+	}
+
+	text := string(bdata)
 	text = strings.ToLower(text)
+
+	bracket := filters.NewBrackets()
+	text = bracket.Filter(text)
+
+	controlChar := filters.NewControlCharacters()
+	text = controlChar.Filter(text)
+
+	punktuation := filters.NewPunctuation()
+	text = punktuation.Filter(text)
+
+	doubles := filters.NewDoublecates()
+	text = doubles.Filter(text)
+
+	text = strings.TrimSpace(text)
 
 	bag := strings.Split(text, " ")
 
-	r := strings.NewReplacer(
-		",", "",
-		".", "",
-		"!", "",
-		"?", "",
-		"  ", " ",
-		" - ", "",
-		"\n", "",
-		"\t", "",
-		"(", "",
-		")", "",
-	)
-
 	words := make(map[string]int)
 	for i := range bag {
-		words[r.Replace(bag[i])]++
+		words[bag[i]]++
 	}
+
+	fmt.Println("не", words["не"])
+	fmt.Println("порох", words["порох"])
+	fmt.Println("пятнадцатилетние", words["пятнадцатилетние	"])
 
 	tfs := []TF{}
 
@@ -76,14 +97,14 @@ func main() {
 		fmt.Errorf("Could not read from db, %s", err)
 	}
 	if len(data) > 0 {
-		docCount = binary.BigEndian.Uint64(data)
+		docCount = int(binary.BigEndian.Uint64(data))
 	}
 
-	docCount += 1
+	docCount++
 	fmt.Printf("Document: %d\n", docCount)
 
 	bs := make([]byte, 8)
-	binary.BigEndian.PutUint64(bs, docCount)
+	binary.BigEndian.PutUint64(bs, uint64(docCount))
 	err = ldb.Set([]byte("#doc_count"), bs, writeOpts)
 	if err != nil {
 		fmt.Errorf("Could not write to db, %s", err)
@@ -107,7 +128,7 @@ func main() {
 			if err != nil {
 				fmt.Errorf("Could not read from binary, %s", err)
 			}
-			t.Count += 1
+			t.Count++
 		}
 
 		tt := struct {
